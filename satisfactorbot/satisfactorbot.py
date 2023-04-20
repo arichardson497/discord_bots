@@ -24,23 +24,23 @@ class SatisfactorBot(SteamCmdBot):
         '!restart - Just calls stop and start....pretty technical stuff',
         '!update - Executes update command and restarts the server',
         '!ip - Gives the IP address of the machine (it may change, cannot be bothered to do static)',
-        '!status - Displays if the bot thinks the server is running'
+        '!status - Displays if the bot thinks the server is running',
+        '!upload_blueprint - Attach files with this message and it will upload the blueprints to the server',
+        '!get_blueprint \"BLUEPRINT NAME\" - Supply the name of the blueprint (no extension) in quotes to get saved blueprints',
+        '!list_blueprints - Lists all blueprints on the server.'
     ]
 
     def __init__(self):
         super(SatisfactorBot, self).__init__()
 
-    def get_token(self):
-        return 'OTAzNDUwMjM5ODI0OTUzMzc1.YXtJmg.27E23HiQtddnqSLiyBEPiqlOl-Y'
-
-    def get_start_process(self):
-        return 'C:\steamcmd\satisfactorydedicatedserver\FactoryServer.exe'
-
-    def get_task(self):
-        return 'UE4Server-Win64-Shipping'
+    def get_config_file_location(self):
+        return '/etc/default/satisfactorbot.json'
 
     def get_help_text(self):
         return SatisfactorBot.HELP_TEXT
+
+    def get_blueprint_directory(self):
+        return self.config['blueprint_location']
 
     async def update(self, message):
         await self.send_message(message, 'Attempting update....this may take a moment.')
@@ -52,8 +52,41 @@ class SatisfactorBot(SteamCmdBot):
         except Exception as e:
             await self.send_message(message, 'Error when updating: ' + str(e))
 
+    async def upload_blueprint(self, message):
+        if message.attachments is not None:
+            not_all_files = False
+            for f in message.attachments:
+                blueprint_name = self.get_blueprint_directory() + f.filename
+                await f.save(blueprint_name)
+                if not os.path.exists(blueprint_name):
+                    not_all_files = True
+
+            if not_all_files:
+                await self.send_message(message, 'Not all files were saved and I do not know why')
+            else:
+                await self.send_message(message, 'All blueprints have been saved. A server restart will be needed to see them in game.')
+
+    async def get_blueprint(self, message, blueprint_name):
+        blueprint_name = blueprint_name.replace('"', '')
+        files = [self.get_blueprint_directory() + blueprint_name + '.sbp', self.get_blueprint_directory() + blueprint_name + '.sbpcfg']
+        if all([True if os.path.exists(x) else False for x in files]):
+            await self.send_message(message, 'Here ya go : ', file=files)
+        else:
+            await self.send_message(message, 'I couldn\'t find that file')
+
+    async def list_blueprints(self, message):
+        blueprints = set()
+        for file in os.listdir(self.get_blueprint_directory()):
+            if file.endswith('sbp'):
+                bp_name = file.split('.')[0]
+                blueprints.add(bp_name)
+        blueprint_str = ''
+        for x in blueprints:
+            blueprint_str += x + '\n'
+        await self.send_message(message, '```' + blueprint_str + '```')
+
     async def save_file(self, message):
-        SAVE_GAME_LOCATION = 'C:\\Users\\adric\\AppData\\Local\\FactoryGame\\Saved\\SaveGames\\server'
+        SAVE_GAME_LOCATION = self.config['save_game_location'] #'C:\\Users\\adric\\AppData\\Local\\FactoryGame\\Saved\\SaveGames\\server'
         save_games = []
         most_recent_file_timestamp = 0
         most_recent_file = None
@@ -111,16 +144,13 @@ class SatisfactorBot(SteamCmdBot):
         for line in fp.readlines():
             if 'Join succeeded' in line:
                 save_lines.append(line)
-        self.send_private_message(message, '```' + str(save_lines) + '```')
+       # self.send_private_message(message, '```' + str(save_lines) + '```')
 
-    async def watch_users(self, message):
-        watch_thread = threading.Thread(target=self.__watch_users(None))
-        watch_thread.start()
-        await self.send_message(message, 'Always watching...')
 
     async def restart(self, message):
         await self.stop(message)
         await self.start(message)
+
 
 
 if __name__ == '__main__':

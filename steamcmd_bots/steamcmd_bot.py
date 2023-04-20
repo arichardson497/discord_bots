@@ -4,17 +4,18 @@ import urllib.request
 from abc import abstractmethod
 from subprocess import CREATE_NEW_CONSOLE
 import discord
+import time
+import threading
+import re           # needed to split on space ignoring quotes
+import json         # for reading the config file
 
 from steamcmd_bots.running_bot_single import RunningBotSingle
-
-external_ip = urllib.request.urlopen('https://ident.me').read().decode('utf8')
-
-print(external_ip)
-
 
 class SteamCmdBot:
 
     def __init__(self):
+        self.config = None
+        self.__load_config_file()
         self.__is_running = self.__check_is_running()
         self.server = None
         self.return_id = None
@@ -27,7 +28,25 @@ class SteamCmdBot:
         RunningBotSingle.get_instance().set_current_bot(self.bot)
         self.schedule_thread = None
         self.schedule_is_running = False
+        self.keep_running = False
 
+    def __load_config_file(self):
+        with open(self.get_config_file_location(), 'r') as f:
+            self.config = json.load(f)
+
+    def keep_running_thread(self):
+        while True:
+            if not self.__check_is_running() and self.keep_running:
+                try:
+                    self.server = subprocess.Popen([self.get_start_process(), '-log'], creationflags=CREATE_NEW_CONSOLE)
+                except Exception as e:
+                    print(str(e))
+            time.sleep(60) # wait for 1 minute
+
+    #needs @ event but i'm not sure how to do that right now
+    async def on_ready(self):
+        t = threading.Thread(target=self.keep_running_thread())
+        t.start()
 
     def __check_is_running(self):
         s = subprocess.check_output('tasklist', shell=True)
@@ -42,26 +61,32 @@ class SteamCmdBot:
         self.__is_running = val
 
     @abstractmethod
-    def get_task(self):
+    def get_config_file_location(self):
         pass
+
+    @abstractmethod
+    def get_task(self):
+        return self.config['task']
 
     def get_task_with_exe(self):
         return self.get_task() + '.exe'
 
     @abstractmethod
     def get_start_process(self):
-        pass
+        return self.config['start_process']
 
     @abstractmethod
     def get_token(self):
-        pass
+        return self.config['token']
 
     @abstractmethod
     def get_help_text(self):
         pass
 
     async def handle_command(self, message):
-        split = message.content.split(' ')
+
+        pattern = re.compile(r'[^\s"]+|"[^"]*"')
+        split = pattern.findall(message.content)
         args = split[1:]
         args.insert(0, message)
         command = split[0].replace('!', '')
@@ -86,16 +111,16 @@ class SteamCmdBot:
                 await self.send_message(message, 'Attempting to start server....')
             try:
                 self.server = subprocess.Popen([self.get_start_process(), '-log'], creationflags=CREATE_NEW_CONSOLE)
-                self.__is_running = True
+                self.keep_running = True
                 if 'False' not in direct_command:
                      await self.send_message(message, 'Server is up!')
             except Exception as e:
                 await self.send_message(message, 'Failed to start server: ' + str(e))
-                self.__is_running = False
+                self.keep_running = False
 
     async def stop(self, message, direct_command="True"):
         os.system('taskkill /f /im ' + self.get_task_with_exe())
-        self.__is_running = False
+        self.keep_running = False
         if direct_command:
             await self.send_message(message, 'Server has been stopped.')
 
@@ -126,6 +151,9 @@ class SteamCmdBot:
                 message = message[:1800]
         if file is None:
             await msg.channel.send(message)
+        elif isinstance(file, list):
+            fs = [discord.File(f) for f in file]
+            await msg.channel.send(message, files=fs)
         else:
             await msg.channel.send(message, file=discord.File(file))
 
