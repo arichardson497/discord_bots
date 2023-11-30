@@ -1,0 +1,5 @@
+*.pyc
+logs/
+save-data/
+__pycache__/
+steamcmd_bots/__pycache__/

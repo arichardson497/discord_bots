@@ -69,7 +69,7 @@ class SteamCmdBot:
         return self.config['task']
 
     def get_task_with_exe(self):
-        return self.get_task() + '.exe'
+        return self.get_task() + '.exe' if '.exe' not in self.get_task() else self.get_task()
 
     @abstractmethod
     def get_start_process(self):

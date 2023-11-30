@@ -1,7 +1,6 @@
 import os
 import subprocess
 import time
-GUILD = "unpleasant_company"
 from subprocess import Popen, CREATE_NEW_CONSOLE
 import threading
 from steamcmd_bots.steamcmd_bot import SteamCmdBot
@@ -24,19 +23,11 @@ class ValheimBot(SteamCmdBot):
         super(ValheimBot, self).__init__()
 
 
-
+    def get_config_file_location(self):
+        return '/etc/default/valheimbot.json'
 
     def get_install(self):
         return 'C:\steamcmd\steamcmd +login anonymous +force_install_dir valheimdedicatedserver +app_update 896660 validate +quit'
-
-    def get_token(self):
-        return 'MTA0NTE1NzU3OTA5MDgyOTQwMw.GCeG2Z.g4rd-KqlxaGRhAzOoG-VrVf8N7UN6A4P0kJoJY'
-
-    def get_task(self):
-        return 'valheim_server'
-
-    def get_start_process(self):
-        return 'C:/steamcmd/valheimdedicatedserver/start_my_headless_server.bat'
 
     def get_help_text(self):
         return ValheimBot.HELP_TEXT
