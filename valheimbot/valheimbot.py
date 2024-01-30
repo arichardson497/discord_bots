@@ -16,8 +16,14 @@ class ValheimBot(SteamCmdBot):
         '!update - Executes update command and restarts the server',
         '!ip - Gives the IP address of the machine (it may change, cannot be bothered to do static)',
         '!password - Gives the password needed to join the server',
-        '!status - Displays if the bot thinks the server is running'
+        '!status - Displays if the bot thinks the server is running',
+        '!mod_list - Displays list of mods on the server.'
     ]
+
+
+    MOD_DIRECTORY = 'C:/Games/Mods/Valheim/'
+    ZIP_DIRECTORY = 'C:/Games/Zip/Valheim/'
+    MOD_JSON = 'C:/Games/Mods/Valheim/required.json'
 
     def __init__(self):
         super(ValheimBot, self).__init__()
@@ -57,6 +63,39 @@ class ValheimBot(SteamCmdBot):
             await self.send_message(message, 'Update Completed! Server should be up (or will be shortly)')
         except Exception as e:
             await self.send_message(message, 'Error when updating: ' + str(e))
+
+    async def mod_list(self, message):
+
+        if os.path.exists(ValheimBot.MOD_JSON):
+            required = self.read_json_file(ValheimBot.MOD_JSON)
+
+            mod_list = '# Required\n```'
+            mods = ''
+            for v in required['required']:
+                mods += v + '\n'
+            mod_list += mods.strip() + '```'
+
+            mod_list += '\n# Optional\n```'
+            mods = ''
+            for v in required['optional']:
+                mods += v + '\n'
+            mod_list += mods.strip() + '```'
+            await self.send_message(message, mod_list)
+        else:
+            mods = []
+            if os.path.exists(ValheimBot.MOD_DIRECTORY):
+                for dir_name in os.listdir(ValheimBot.MOD_DIRECTORY):
+                    if os.path.isdir(os.path.join(ValheimBot.MOD_DIRECTORY, dir_name)):
+                        mods.append(dir_name)
+            mod_list = ''
+            for mod in mods:
+                mod_list += mod + '\n'
+            mod_list = mod_list.strip()
+            await self.send_message(message, '```' + mod_list + '```')
+
+    async def get_mods(self, message):
+        await self.send_message(message, 'Download the mods here: https://drive.google.com/drive/folders/1--x_eCVlfHWrOj5_f-89dyP68kv6IAxg?usp=drive_link')
+
 
     async def stop(self, message, direct_command="True"):
         returnval = subprocess.call(['C:/Program Files/AutoHotkey/v2/AutoHotkey64.exe', 'C:/steamcmd/valheimdedicatedserver/stop_server.ahk'])

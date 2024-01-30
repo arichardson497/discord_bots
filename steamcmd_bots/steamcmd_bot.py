@@ -8,6 +8,9 @@ import time
 import threading
 import re           # needed to split on space ignoring quotes
 import json         # for reading the config file
+import zipfile
+import shutil, errno
+from datetime import datetime
 
 from steamcmd_bots.running_bot_single import RunningBotSingle
 
@@ -60,6 +63,9 @@ class SteamCmdBot:
     def set_is_running(self, val):
         self.__is_running = val
 
+
+
+
     @abstractmethod
     def get_config_file_location(self):
         pass
@@ -82,6 +88,62 @@ class SteamCmdBot:
     @abstractmethod
     def get_help_text(self):
         pass
+
+    def read_json_file(self, json_file_path):
+        json_info = {}
+        with open(json_file_path, 'r') as fp:
+            json_info = json.load(fp)
+        return json_info
+
+    def zip_directories(self, source_folder, output_folder):
+        zip_file_paths = []
+
+        # Ensure the output folder exists
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Loop over items in the source folder
+        for item in os.listdir(source_folder):
+            item_path = os.path.join(source_folder, item)
+
+            # Check if it's a directory
+            if os.path.isdir(item_path):
+                # Create a zip file for the directory
+                zip_filename = f"{item}.zip"
+                zip_filepath = os.path.join(output_folder, zip_filename)
+
+                with zipfile.ZipFile(zip_filepath, 'w') as zip_file:
+                    # Zip the contents of the directory
+                    for root, dirs, files in os.walk(item_path):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.relpath(file_path, item_path)
+                            zip_file.write(file_path, arcname=arcname)
+
+                # Add the zip file path to the list
+                zip_file_paths.append(zip_filepath)
+
+        return zip_file_paths
+
+    def delete_directory_contents(self, directory_path):
+        try:
+            # Ensure the directory exists
+            if os.path.exists(directory_path):
+                # Delete the contents of the directory
+                for item in os.listdir(directory_path):
+                    item_path = os.path.join(directory_path, item)
+
+                    if os.path.isfile(item_path):
+                        os.remove(item_path)
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+
+                print(f"Contents of '{directory_path}' deleted successfully.")
+            else:
+                print(f"Directory '{directory_path}' does not exist.")
+        except Exception as e:
+            print(f"Error deleting contents: {e}")
+
+
 
     async def handle_command(self, message):
 
