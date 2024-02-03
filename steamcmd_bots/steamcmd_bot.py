@@ -10,11 +10,25 @@ import re           # needed to split on space ignoring quotes
 import json         # for reading the config file
 import zipfile
 import shutil, errno
+import ctypes
+import pygetwindow as gw
+import pyautogui
 from datetime import datetime
 
 from steamcmd_bots.running_bot_single import RunningBotSingle
 
+
 class SteamCmdBot:
+
+    DEFAULT_HELP_TEXT = [
+        '!start - Starts the Server',
+        '!stop - Stops the Server (Note: this force kills the process)',
+        '!restart - Just calls stop and start....pretty technical stuff',
+        '!update - Executes update command and restarts the server',
+        '!ip - Gives the IP address of the machine (it may change, cannot be bothered to do static)',
+        '!password - Gives the password needed to join the server',
+        '!status - Displays if the bot thinks the server is running'
+    ]
 
     def __init__(self):
         self.config = None
@@ -64,7 +78,9 @@ class SteamCmdBot:
         self.__is_running = val
 
 
-
+    @abstractmethod
+    def get_install(self):
+        return None
 
     @abstractmethod
     def get_config_file_location(self):
@@ -87,7 +103,19 @@ class SteamCmdBot:
 
     @abstractmethod
     def get_help_text(self):
-        pass
+        return SteamCmdBot.DEFAULT_HELP_TEXT
+
+    @abstractmethod
+    def get_port(self):
+        return self.config['port']
+
+    @abstractmethod
+    def get_password(self):
+        return self.config['password']
+
+    @abstractmethod
+    def get_stop_ahk_location(self):
+        return 'C:/User/adrich/PycharmProjects/discord_bots/steamcmd_bots/stop_server.ahk'
 
     def read_json_file(self, json_file_path):
         json_info = {}
@@ -160,6 +188,14 @@ class SteamCmdBot:
         else:
             await self.send_message(message, 'Command: ' + split[0] + ' is not supported.')
 
+    async def install(self, message):
+        await self.send_message(message, 'Attempting install....this may take a moment.')
+        try:
+            os.system(str(self.get_install()))
+        except Exception as e:
+            await self.send_message(message, 'Failed install: ' + str(e))
+
+
     async def status(self, message):
         if self.__check_is_running():
             await self.send_message(message, 'Server is running!')
@@ -180,11 +216,92 @@ class SteamCmdBot:
                 await self.send_message(message, 'Failed to start server: ' + str(e))
                 self.keep_running = False
 
-    async def stop(self, message, direct_command="True"):
-        os.system('taskkill /f /im ' + self.get_task_with_exe())
-        self.keep_running = False
-        if direct_command:
+    async def update(self, message):
+        await self.send_message(message, 'Attempting update....this may take a moment.')
+        try:
+            await self.stop(message, direct_command="False")
+            os.system(str(self.get_install()))
+            await self.start(message, direct_command="False")
+            await self.send_message(message, 'Update Completed! Server should be up (or will be shortly)')
+        except Exception as e:
+            await self.send_message(message, 'Error when updating: ' + str(e))
+
+    @abstractmethod
+    async def stop(self, message, *args):
+
+        success = self.kill_command_prompt_by_title(self.get_task())
+        if success:
             await self.send_message(message, 'Server has been stopped.')
+            return
+
+        '''
+        ahk_script = self.get_stop_ahk_location()
+        if ahk_script:
+            await self.stop_via_ahk(message, ahk_script)
+        else:
+            os.system('taskkill /f /im ' + self.get_task_with_exe())
+            self.keep_running = False
+            if direct_command:
+                await self.send_message(message, 'Server has been stopped.')
+        '''
+
+    def get_window_class_name(self, window):
+        class_name_buffer = ctypes.create_unicode_buffer(256)
+        ctypes.windll.user32.GetClassNameW(window._hWnd, class_name_buffer, ctypes.sizeof(class_name_buffer))
+        return class_name_buffer.value
+
+    def is_cmd_window(self, window):
+        class_name = self.get_window_class_name(window)
+        return "ConsoleWindowClass" in class_name
+
+
+    def kill_command_prompt_by_title(self, title):
+        try:
+            cmd_window = None
+            for window in gw.getWindowsWithTitle(title):
+                if self.is_cmd_window(window):
+                    cmd_window = window
+                    break
+            if not cmd_window:
+                return
+            cmd_window.activate()
+            # Send Ctrl+C
+            self.__close_window(cmd_window, 'ctrl', 'c')
+            time.sleep(5)
+            self.__close_window(cmd_window, 'ctrl', 'c')
+            time.sleep(1)
+            self.__close_window(cmd_window, 'ctrl', 'c')
+            time.sleep(1)
+            self.__close_window(cmd_window, 'Y')
+            time.sleep(1)
+            self.__close_window(cmd_window, 'enter')
+
+            print(f"Ctrl+C sent to the command prompt window with title '{title}'.")
+            return True
+        except IndexError:
+            print(f"Error: Command prompt window with title '{title}' not found.")
+        except Exception as e:
+            print(f"Error: {e}")
+        return False
+
+    def __close_window(self, cmd_window, *args):
+        if cmd_window.isActive():
+            pyautogui.hotkey(args)
+
+    async def password(self, message):
+        try:
+            password = self.get_password()
+            await self.send_message(message, "```" + password + "```")
+        except Exception as e:
+            await self.send_message(message, 'No password is set for this game.')
+
+    async def stop_via_ahk(self, message, ahk_script):
+        returnval = subprocess.call(['C:/Program Files/AutoHotkey/v2/AutoHotkey64.exe', ahk_script])
+        if returnval == 1:
+            self.__is_running = False
+            await self.send_message(message, 'Server has been stopped successfully.')
+        else:
+            await self.send_message(message, 'Failed to stop server. I don\'t know what happened.')
 
     async def restart(self, message):
         await self.stop(message)
@@ -202,8 +319,15 @@ class SteamCmdBot:
         await self.send_message(message, 'The Worst...')
 
     async def ip(self, message):
+        port = ''
+        try:
+            port = str(self.get_port())
+        except:
+            port = 'None'
+
         external_ip = urllib.request.urlopen('https://v4.ident.me').read().decode('utf8')
-        await self.send_message(message, external_ip)
+        await self.send_message(message, external_ip + ':' + port)
+
 
     async def send_message(self, msg, message, file=None):
         if len(message) > 1800:

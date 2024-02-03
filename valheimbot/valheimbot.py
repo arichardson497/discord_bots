@@ -19,15 +19,12 @@ class ValheimBot(SteamCmdBot):
         '!status - Displays if the bot thinks the server is running',
         '!mod_list - Displays list of mods on the server.'
     ]
-
-
     MOD_DIRECTORY = 'C:/Games/Mods/Valheim/'
     ZIP_DIRECTORY = 'C:/Games/Zip/Valheim/'
     MOD_JSON = 'C:/Games/Mods/Valheim/required.json'
 
     def __init__(self):
         super(ValheimBot, self).__init__()
-
 
     def get_config_file_location(self):
         return '/etc/default/valheimbot.json'
@@ -37,9 +34,6 @@ class ValheimBot(SteamCmdBot):
 
     def get_help_text(self):
         return ValheimBot.HELP_TEXT
-
-    async def address(self, message):
-        await self.send_message(message, 'Not Yet Implemented!')
 
     async def restart_via_schedule(self, message):
         returnval = subprocess.call(['C:/Program Files/AutoHotkey/v2/AutoHotkey64.exe', 'C:/steamcmd/valheimdedicatedserver/stop_server.ahk'])
@@ -96,7 +90,6 @@ class ValheimBot(SteamCmdBot):
     async def get_mods(self, message):
         await self.send_message(message, 'Download the mods here: https://drive.google.com/drive/folders/1--x_eCVlfHWrOj5_f-89dyP68kv6IAxg?usp=drive_link')
 
-
     async def stop(self, message, direct_command="True"):
         returnval = subprocess.call(['C:/Program Files/AutoHotkey/v2/AutoHotkey64.exe', 'C:/steamcmd/valheimdedicatedserver/stop_server.ahk'])
         if returnval == 1:
@@ -105,11 +98,7 @@ class ValheimBot(SteamCmdBot):
         else:
             await self.send_message(message, 'Failed to stop server. I don\'t know what happened.')
 
-    async def save(self, message):
-        await self.send_message(message, 'Save not yet implemented, working on it though!')
 
-    async def password(self, message):
-        await self.send_message(message, '4543!')
 
 if __name__ == '__main__':
 
